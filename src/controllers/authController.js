@@ -18,24 +18,38 @@ exports.signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    await User.create({
+    const newUser = await User.create({
       name,
       email,
       password: hashedPassword,
     });
 
-    return res.status(201).json({ message: "Signup successful" });
+    const token = jwt.sign(
+      { userId: newUser._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    return res.status(201).json({
+      message: "Signup successful",
+      token,
+      user_id: newUser._id,
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+      },
+    });
   } catch (err) {
+    console.error(err);
     return res.status(500).json({ message: "Signup failed" });
   }
 };
-
 
 /* ================= LOGIN ================= */
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("LOGIN REQ BODY:", req.body);
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password required" });
@@ -60,8 +74,10 @@ exports.login = async (req, res) => {
     return res.status(200).json({
       message: "Login successful",
       token,
+      user_id: user._id,
       user: {
         id: user._id,
+        name: user.name,
         email: user.email,
       },
     });
