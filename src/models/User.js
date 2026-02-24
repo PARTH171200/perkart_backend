@@ -22,6 +22,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    // ✅ ADD THIS
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
+
+    // ✅ Optional (for future scaling)
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

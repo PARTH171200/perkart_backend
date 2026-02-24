@@ -15,5 +15,7 @@ app.use("/health", (req, res) => res.send("API is running"));
 app.use("/api/auth", authRoutes);
 app.use("/api/me", meRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/admin", require("./routes/adminRoutes"));
+app.use("/api/admin/auth", require("./routes/adminAuth"));
 
 module.exports = app;
