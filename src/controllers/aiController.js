@@ -1,5 +1,6 @@
 const axios = require("axios");
 const multer = require("multer");
+const cron = require("node-cron");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -8,14 +9,11 @@ const upload = multer({
 const AI_ENGINE = process.env.MY_AI_ENGINE_URL;
 
 /* =========================================================
-   INITIAL GENERATE / ANALYZE
+   1️⃣ INITIAL GENERATE / ANALYZE
 ========================================================= */
 
 const getAIResponse = async (req, res) => {
   try {
-    console.log("👉 AI ROUTE HIT");
-    console.log("BODY:", req.body);
-
     const { prompt, user_id, image_url } = req.body;
     const imageFile = req.file;
 
@@ -47,8 +45,6 @@ const getAIResponse = async (req, res) => {
       payload.image_url = image_url;
     }
 
-    console.log("🚀 Sending to AI Engine...");
-
     const engineResponse = await axios.post(
       `${AI_ENGINE}/analyze`,
       payload,
@@ -63,7 +59,6 @@ const getAIResponse = async (req, res) => {
 
   } catch (error) {
     console.error("🔥 AI ENGINE ERROR:", error.response?.data || error.message);
-
     return res.status(500).json({
       success: false,
       error: error.response?.data || error.message,
@@ -71,15 +66,54 @@ const getAIResponse = async (req, res) => {
   }
 };
 
+/* =========================================================
+   2️⃣ START NEWS SESSION
+========================================================= */
+
+const startNewsSession = async (req, res) => {
+  try {
+    const { user_id, news_id } = req.body;
+
+    if (!user_id || !news_id) {
+      return res.status(400).json({
+        success: false,
+        error: "user_id and news_id are required",
+      });
+    }
+
+    const response = await axios.post(
+      `${AI_ENGINE}/pulse/start-session`,
+      null,
+      {
+        params: {
+          user_id: String(user_id),
+          news_id: Number(news_id),
+        },
+        timeout: 30000,
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      conversation_id: response.data.conversation_id,
+      title: response.data.title,
+    });
+
+  } catch (error) {
+    console.error("🔥 START SESSION ERROR:", error.response?.data || error.message);
+    return res.status(500).json({
+      success: false,
+      error: error.response?.data || error.message,
+    });
+  }
+};
 
 /* =========================================================
-   CHAT CONTINUATION
+   3️⃣ CHAT CONTINUATION
 ========================================================= */
 
 const chatAI = async (req, res) => {
   try {
-    console.log("👉 CHAT ROUTE HIT");
-
     const { conversation_id, message } = req.body;
 
     if (!conversation_id) {
@@ -110,12 +144,11 @@ const chatAI = async (req, res) => {
     return res.status(200).json({
       success: true,
       reply: engineResponse.data.reply,
-      conversation_id: conversation_id,
+      conversation_id,
     });
 
   } catch (error) {
     console.error("🔥 CHAT ERROR:", error.response?.data || error.message);
-
     return res.status(500).json({
       success: false,
       error: error.response?.data || error.message,
@@ -123,34 +156,26 @@ const chatAI = async (req, res) => {
   }
 };
 
-
 /* =========================================================
-   GET USER CONVERSATIONS
+   4️⃣ GET USER CONVERSATIONS
 ========================================================= */
 
 const getUserConversations = async (req, res) => {
   try {
     const { user_id } = req.params;
 
-    if (!user_id) {
-      return res.status(400).json({
-        success: false,
-        error: "user_id is required",
-      });
-    }
-
     const response = await axios.get(
-      `${AI_ENGINE}/conversations/${user_id}`
+      `${AI_ENGINE}/conversations/${user_id}`,
+      { timeout: 30000 }
     );
-    console.log("🚀 Conversations fetched:", response.data);
+
     return res.status(200).json({
       success: true,
       conversations: response.data,
     });
 
   } catch (error) {
-    console.error("🔥 GET CONVERSATIONS ERROR:", error.message);
-
+    console.error("🔥 GET CONVERSATIONS ERROR:", error.response?.data || error.message);
     return res.status(500).json({
       success: false,
       error: error.response?.data || error.message,
@@ -158,34 +183,26 @@ const getUserConversations = async (req, res) => {
   }
 };
 
-
 /* =========================================================
-   GET MESSAGES OF A CONVERSATION
+   5️⃣ GET CONVERSATION MESSAGES
 ========================================================= */
 
 const getConversationMessages = async (req, res) => {
   try {
     const { conversation_id } = req.params;
 
-    if (!conversation_id) {
-      return res.status(400).json({
-        success: false,
-        error: "conversation_id is required",
-      });
-    }
-
     const response = await axios.get(
-      `${AI_ENGINE}/conversations/${conversation_id}/messages`
+      `${AI_ENGINE}/conversations/${conversation_id}/messages`,
+      { timeout: 30000 }
     );
-    console.log("🚀 Messages fetched:", response.data);
+
     return res.status(200).json({
       success: true,
       data: response.data,
     });
 
   } catch (error) {
-    console.error("🔥 GET MESSAGES ERROR:", error.message);
-
+    console.error("🔥 GET MESSAGES ERROR:", error.response?.data || error.message);
     return res.status(500).json({
       success: false,
       error: error.response?.data || error.message,
@@ -193,10 +210,114 @@ const getConversationMessages = async (req, res) => {
   }
 };
 
+/* =========================================================
+   🔥 AUTO DAILY NEWS INGESTION (NO MANUAL ENDPOINT)
+========================================================= */
+
+const startAutoNewsScheduler = () => {
+
+  if (process.env.ENABLE_DAILY_NEWS_FETCH !== "true") {
+    console.log("🛑 Daily News Scheduler Disabled");
+    return;
+  }
+
+  const schedule = process.env.DAILY_FETCH_TIME || "0 6 * * *";
+  if (!cron.validate(schedule)) {
+    console.error("❌ Invalid cron schedule:", schedule);
+    return;
+  }
+
+  console.log("🕒 Daily News Scheduler Enabled");
+  console.log("⏰ Schedule:", schedule);
+
+  const runIngestion = async () => {
+    console.log("🚀 Starting News Ingestion...");
+
+    try {
+      const sectors = [
+        "Biopharma",
+        "Automotive",
+        "Engineering",
+        "Aviation",
+        "Manufacturing",
+        "Artificial Intelligence",
+      ];
+
+      for (const sector of sectors) {
+        console.log(`📡 Fetching sector: ${sector}`);
+
+        await axios.post(
+          `${AI_ENGINE}/pulse/fetch-news`,
+          { sector },
+          { timeout: 180000 }
+        );
+      }
+
+      console.log("✅ News Ingestion Completed Successfully");
+
+    } catch (error) {
+      console.error("❌ News Ingestion Failed:");
+      console.error(error.response?.data || error.message);
+    }
+  };
+
+  // Run once immediately on server start
+  runIngestion();
+
+  // Run daily
+  cron.schedule(schedule, async () => {
+    await runIngestion();
+  });
+};
+
+startAutoNewsScheduler();
+
+
+/* =========================================================
+   GET STORED NEWS (FOR FRONTEND LISTING)
+========================================================= */
+
+const getNews = async (req, res) => {
+  try {
+    const { sector, page = 1, limit = 10 } = req.query;
+
+    const response = await axios.get(
+      `${AI_ENGINE}/pulse/news`,
+      {
+        params: {
+          sector,
+          page,
+          limit
+        },
+        timeout: 30000
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      news: response.data.news,
+      pagination: response.data.pagination
+    });
+
+  } catch (error) {
+    console.error("🔥 GET NEWS ERROR:", error.response?.data || error.message);
+
+    return res.status(500).json({
+      success: false,
+      error: error.response?.data || error.message
+    });
+  }
+};
+
+/* =========================================================
+   EXPORTS
+========================================================= */
 
 module.exports = {
   upload,
   getAIResponse,
+  startNewsSession,
+  getNews,
   chatAI,
   getUserConversations,
   getConversationMessages,

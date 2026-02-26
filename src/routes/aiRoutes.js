@@ -14,4 +14,8 @@ router.get("/conversations/:user_id", controller.getUserConversations);
 // Get Messages
 router.get("/messages/:conversation_id", controller.getConversationMessages);
 
+router.post("/start-news-session", controller.startNewsSession);
+
+router.get("/news", controller.getNews);
+
 module.exports = router;
