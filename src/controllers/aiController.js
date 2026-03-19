@@ -14,8 +14,11 @@ const AI_ENGINE = process.env.MY_AI_ENGINE_URL;
 
 const getAIResponse = async (req, res) => {
   try {
-    const { prompt, user_id, image_url } = req.body;
+    const { prompt, image_url } = req.body;
     const imageFile = req.file;
+
+    // Use req.user.id from auth middleware (fallback to body for compatibility)
+    const user_id = req.user?.id || req.body.user_id;
 
     if (!user_id) {
       return res.status(401).json({
@@ -72,7 +75,10 @@ const getAIResponse = async (req, res) => {
 
 const startNewsSession = async (req, res) => {
   try {
-    const { user_id, news_id } = req.body;
+    const { news_id } = req.body;
+
+    // Use req.user.id from auth middleware (fallback to body for compatibility)
+    const user_id = req.user?.id || req.body.user_id;
 
     if (!user_id || !news_id) {
       return res.status(400).json({
@@ -92,7 +98,7 @@ const startNewsSession = async (req, res) => {
         timeout: 30000,
       }
     );
-
+    console.log("📊 Start News Session Response:", response.data);
     return res.status(200).json({
       success: true,
       conversation_id: response.data.conversation_id,
@@ -211,7 +217,7 @@ const getConversationMessages = async (req, res) => {
 };
 
 /* =========================================================
-   🔥 AUTO DAILY NEWS INGESTION (NO MANUAL ENDPOINT)
+   🔥 AUTO DAILY NEWS INGESTION
 ========================================================= */
 
 const startAutoNewsScheduler = () => {
@@ -245,7 +251,6 @@ const startAutoNewsScheduler = () => {
 
       for (const sector of sectors) {
         console.log(`📡 Fetching sector: ${sector}`);
-
         await axios.post(
           `${AI_ENGINE}/pulse/fetch-news`,
           { sector },
@@ -261,10 +266,8 @@ const startAutoNewsScheduler = () => {
     }
   };
 
-  // Run once immediately on server start
   runIngestion();
 
-  // Run daily
   cron.schedule(schedule, async () => {
     await runIngestion();
   });
@@ -272,39 +275,39 @@ const startAutoNewsScheduler = () => {
 
 startAutoNewsScheduler();
 
-
 /* =========================================================
-   GET STORED NEWS (FOR FRONTEND LISTING)
+   GET STORED NEWS (FOR FRONTEND LISTING + SEARCH)
 ========================================================= */
 
 const getNews = async (req, res) => {
   try {
-    const { sector, page = 1, limit = 10 } = req.query;
+    const { sector, page = 1, limit = 10, search } = req.query;
+
+    // Build params — pass search query if provided
+    const params = { page, limit };
+    if (sector) params.sector = sector;
+    if (search && search.trim()) params.search = search.trim();
 
     const response = await axios.get(
       `${AI_ENGINE}/pulse/news`,
       {
-        params: {
-          sector,
-          page,
-          limit
-        },
-        timeout: 30000
+        params,
+        timeout: 30000,
       }
     );
+    console.log("📊 News Fetch Response:", response.data);
 
     return res.status(200).json({
       success: true,
       news: response.data.news,
-      pagination: response.data.pagination
+      pagination: response.data.pagination,
     });
 
   } catch (error) {
     console.error("🔥 GET NEWS ERROR:", error.response?.data || error.message);
-
     return res.status(500).json({
       success: false,
-      error: error.response?.data || error.message
+      error: error.response?.data || error.message,
     });
   }
 };

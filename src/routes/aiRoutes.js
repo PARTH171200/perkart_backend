@@ -1,21 +1,32 @@
 const express = require("express");
 const router = express.Router();
 const controller = require("../controllers/aiController");
+const auth = require("../middleware/authMiddleware");
+const checkSearchLimit = require("../middleware/searchLimitMiddleware");
 
-// Analyze
-router.post("/generate", controller.upload.single("image"), controller.getAIResponse);
+// ── Analyze (Forge) ────────────────────────────────────────────────────────
+// checkSearchLimit enforces 10/day for free tier and increments stats
+router.post(
+  "/generate",
+  auth,
+  checkSearchLimit,
+  controller.upload.single("image"),
+  controller.getAIResponse
+);
 
-// Chat
-router.post("/chat", controller.chatAI);
+// ── Chat (no search limit — it's a follow-up, not a new search) ───────────
+router.post("/chat", auth, controller.chatAI);
 
-// List Conversations
-router.get("/conversations/:user_id", controller.getUserConversations);
+// ── Conversations ──────────────────────────────────────────────────────────
+router.get("/conversations/:user_id", auth, controller.getUserConversations);
 
-// Get Messages
-router.get("/messages/:conversation_id", controller.getConversationMessages);
+// ── Messages ───────────────────────────────────────────────────────────────
+router.get("/messages/:conversation_id", auth, controller.getConversationMessages);
 
-router.post("/start-news-session", controller.startNewsSession);
+// ── Pulse News Session (counts as a search for free tier) ─────────────────
+router.post("/start-news-session", auth, checkSearchLimit, controller.startNewsSession);
 
-router.get("/news", controller.getNews);
+// ── News Feed (just fetching, no search count) ─────────────────────────────
+router.get("/news", auth, controller.getNews);
 
 module.exports = router;

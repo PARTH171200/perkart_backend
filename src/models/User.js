@@ -22,18 +22,35 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-
-    // ✅ ADD THIS
     role: {
       type: String,
       enum: ["user", "admin"],
       default: "user",
     },
-
-    // ✅ Optional (for future scaling)
     isBlocked: {
       type: Boolean,
       default: false,
+    },
+
+    // ── Subscription tier ──────────────────────────────────────────────────
+    subscriptionTier: {
+      type: String,
+      enum: ["free", "premium", "pro", "enterprise"],
+      default: "free",
+    },
+
+    // ── Usage stats ────────────────────────────────────────────────────────
+    stats: {
+      searches: { type: Number, default: 0 },
+      insights: { type: Number, default: 0 },
+      ideas: { type: Number, default: 0 },
+      riskChecks: { type: Number, default: 0 },
+    },
+
+    // ── Daily search limit tracking (for free tier) ────────────────────────
+    dailySearches: {
+      count: { type: Number, default: 0 },
+      date: { type: String, default: "" }, // stored as YYYY-MM-DD
     },
   },
   { timestamps: true }
