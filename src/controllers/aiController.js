@@ -281,33 +281,33 @@ startAutoNewsScheduler();
 
 const getNews = async (req, res) => {
   try {
-    const { sector, page = 1, limit = 10, search } = req.query;
-
-    // Build params — pass search query if provided
-    const params = { page, limit };
-    if (sector) params.sector = sector;
-    if (search && search.trim()) params.search = search.trim();
-
+    const { sector, page = 1, limit = 10 } = req.query;
+    console.log(`📡 Fetching news - Sector: ${sector}, Page: ${page}, Limit: ${limit}`);
     const response = await axios.get(
       `${AI_ENGINE}/pulse/news`,
       {
-        params,
-        timeout: 30000,
+        params: {
+          sector,
+          page,
+          limit
+        },
+        timeout: 30000
       }
     );
-    console.log("📊 News Fetch Response:", response.data);
+    console.log("📊 Get News Response:", response.data);
 
     return res.status(200).json({
       success: true,
       news: response.data.news,
-      pagination: response.data.pagination,
+      pagination: response.data.pagination
     });
 
   } catch (error) {
     console.error("🔥 GET NEWS ERROR:", error.response?.data || error.message);
+
     return res.status(500).json({
       success: false,
-      error: error.response?.data || error.message,
+      error: error.response?.data || error.message
     });
   }
 };

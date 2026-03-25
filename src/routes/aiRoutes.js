@@ -27,6 +27,6 @@ router.get("/messages/:conversation_id", auth, controller.getConversationMessage
 router.post("/start-news-session", auth, checkSearchLimit, controller.startNewsSession);
 
 // ── News Feed (just fetching, no search count) ─────────────────────────────
-router.get("/news", auth, controller.getNews);
+router.get("/news", controller.getNews);
 
 module.exports = router;
