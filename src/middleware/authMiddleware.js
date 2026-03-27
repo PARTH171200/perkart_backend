@@ -19,6 +19,7 @@ module.exports = async function (req, res, next) {
 
     console.log("User from DB:", user); // 🔍 debug
 
+
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
