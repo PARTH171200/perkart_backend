@@ -1,6 +1,7 @@
 const axios = require("axios");
 const multer = require("multer");
 const cron = require("node-cron");
+const User = require("../models/User");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -9,7 +10,22 @@ const upload = multer({
 const AI_ENGINE = process.env.MY_AI_ENGINE_URL;
 
 /* =========================================================
+   HELPER — Increment a user stat silently
+========================================================= */
+async function incrementStat(userId, field) {
+  try {
+    await User.findByIdAndUpdate(userId, {
+      $inc: { [`stats.${field}`]: 1 },
+    });
+  } catch (err) {
+    console.error(`Failed to increment stat ${field} for user ${userId}:`, err.message);
+    // Never block the main response for a stat failure
+  }
+}
+
+/* =========================================================
    1️⃣ INITIAL GENERATE / ANALYZE
+   → increments: insights
 ========================================================= */
 
 const getAIResponse = async (req, res) => {
@@ -17,7 +33,6 @@ const getAIResponse = async (req, res) => {
     const { prompt, image_url } = req.body;
     const imageFile = req.file;
 
-    // Use req.user.id from auth middleware (fallback to body for compatibility)
     const user_id = req.user?.id || req.body.user_id;
 
     if (!user_id) {
@@ -54,6 +69,9 @@ const getAIResponse = async (req, res) => {
       { timeout: 60000 }
     );
 
+    // ✅ Increment insights stat
+    await incrementStat(user_id, "insights");
+
     return res.status(200).json({
       success: true,
       analyze: engineResponse.data.analyze,
@@ -71,13 +89,13 @@ const getAIResponse = async (req, res) => {
 
 /* =========================================================
    2️⃣ START NEWS SESSION
+   → increments: riskChecks
 ========================================================= */
 
 const startNewsSession = async (req, res) => {
   try {
     const { news_id } = req.body;
 
-    // Use req.user.id from auth middleware (fallback to body for compatibility)
     const user_id = req.user?.id || req.body.user_id;
 
     if (!user_id || !news_id) {
@@ -98,7 +116,12 @@ const startNewsSession = async (req, res) => {
         timeout: 30000,
       }
     );
+
     console.log("📊 Start News Session Response:", response.data);
+
+    // ✅ Increment riskChecks stat
+    await incrementStat(user_id, "riskChecks");
+
     return res.status(200).json({
       success: true,
       conversation_id: response.data.conversation_id,
@@ -116,11 +139,14 @@ const startNewsSession = async (req, res) => {
 
 /* =========================================================
    3️⃣ CHAT CONTINUATION
+   → increments: ideas
 ========================================================= */
 
 const chatAI = async (req, res) => {
   try {
     const { conversation_id, message } = req.body;
+
+    const user_id = req.user?.id || req.body.user_id;
 
     if (!conversation_id) {
       return res.status(400).json({
@@ -146,6 +172,11 @@ const chatAI = async (req, res) => {
       payload,
       { timeout: 60000 }
     );
+
+    // ✅ Increment ideas stat (only if user is known)
+    if (user_id) {
+      await incrementStat(user_id, "ideas");
+    }
 
     return res.status(200).json({
       success: true,
@@ -286,12 +317,8 @@ const getNews = async (req, res) => {
     const response = await axios.get(
       `${AI_ENGINE}/pulse/news`,
       {
-        params: {
-          sector,
-          page,
-          limit
-        },
-        timeout: 30000
+        params: { sector, page, limit },
+        timeout: 30000,
       }
     );
     console.log("📊 Get News Response:", response.data);
@@ -299,15 +326,14 @@ const getNews = async (req, res) => {
     return res.status(200).json({
       success: true,
       news: response.data.news,
-      pagination: response.data.pagination
+      pagination: response.data.pagination,
     });
 
   } catch (error) {
     console.error("🔥 GET NEWS ERROR:", error.response?.data || error.message);
-
     return res.status(500).json({
       success: false,
-      error: error.response?.data || error.message
+      error: error.response?.data || error.message,
     });
   }
 };

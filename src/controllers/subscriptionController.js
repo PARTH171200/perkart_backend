@@ -105,3 +105,33 @@ exports.getSubscriptionStatus = async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to fetch status" });
   }
 };
+
+// ── Get purchase history ───────────────────────────────────────────────────
+exports.getPurchaseHistory = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    const subscriptions = await Subscription.find({ user: userId })
+      .populate("plan", "name type price")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const purchases = subscriptions.map((s) => ({
+      id: s._id,
+      plan_type: s.plan?.type ?? "unknown",
+      plan_name: s.plan?.name ?? "Unknown Plan",
+      product_id: s.productId ?? s.plan?._id ?? "—",
+      transaction_id: s.transactionId ?? "—",
+      status: s.status ?? "pending",
+      amount: s.plan?.price ?? "0",
+      currency: "INR",
+      created_at: s.createdAt,
+      expires_at: s.endDate ?? null,
+    }));
+
+    return res.status(200).json({ purchases });
+  } catch (err) {
+    console.error("getPurchaseHistory error:", err);
+    return res.status(500).json({ message: "Failed to fetch purchase history" });
+  }
+};

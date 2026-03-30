@@ -52,6 +52,18 @@ const userSchema = new mongoose.Schema(
       count: { type: Number, default: 0 },
       date: { type: String, default: "" }, // stored as YYYY-MM-DD
     },
+    resetOtp: {
+  type: String,
+  default: null,
+},
+resetOtpExpiry: {
+  type: Date,
+  default: null,
+},
+settings: {
+  notifications: { type: Boolean, default: true },
+  haptics: { type: Boolean, default: true },
+},
   },
   { timestamps: true }
 );

@@ -12,4 +12,7 @@ router.post("/activate", auth, controller.activateSubscription);
 // New — get current subscription status
 router.get("/status", auth, controller.getSubscriptionStatus);
 
+// New — get purchase history
+router.get("/history", auth, controller.getPurchaseHistory);
+
 module.exports = router;
