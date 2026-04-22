@@ -7,6 +7,8 @@ const aiRoutes = require("./routes/aiRoutes");
 const planRoutes = require("./routes/planRoutes");
 const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const profileRoutes = require("./routes/profileRoutes");
+const path = require("path");
+
 
 const app = express();
 
@@ -23,4 +25,5 @@ app.use("/api/admin/auth", require("./routes/adminAuth"));
 app.use("/api/plans", planRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api", profileRoutes);
+app.use("/pitch-decks", express.static(path.join(__dirname, "public/pitch-decks")));
 module.exports = app;

@@ -3,6 +3,8 @@ const router = express.Router();
 const controller = require("../controllers/aiController");
 const auth = require("../middleware/authMiddleware");
 const checkSearchLimit = require("../middleware/searchLimitMiddleware");
+const { buildPitchDeck } = require("../controllers/pitchDeckController");
+
 
 
 // ── Analyze (Forge) ────────────────────────────────────────────────────────
@@ -29,6 +31,8 @@ router.post("/start-news-session", auth, checkSearchLimit, controller.startNewsS
 
 // ── News Feed (just fetching, no search count) ─────────────────────────────
 router.get("/news", controller.getNews);
+
+router.post("/generate-pitch-deck", auth, buildPitchDeck);
 
 
 module.exports = router;

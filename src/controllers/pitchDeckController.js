@@ -1,0 +1,215 @@
+// pitchDeckController.js
+// POST /api/ai/generate-pitch-deck
+// Accepts { pitchText } — the raw markdown pitch deck from the AI
+// Generates a formatted DOCX and returns a downloadUrl
+
+const {
+  Document, Packer, Paragraph, TextRun,
+  HeadingLevel, AlignmentType, BorderStyle,
+  WidthType, ShadingType, LevelFormat, PageBreak,
+} = require("docx");
+const fs   = require("fs");
+const path = require("path");
+
+const buildPitchDeck = async (req, res) => {
+  try {
+    const { pitchText } = req.body;
+
+    if (!pitchText) {
+      return res.status(400).json({ success: false, error: "pitchText is required" });
+    }
+
+    const date = new Date().toLocaleDateString("en-IN", {
+      year: "numeric", month: "long", day: "numeric",
+    });
+
+    // ── Parse the markdown text into sections ─────────────────────────────
+    const lines    = pitchText.split("\n");
+    const children = [];
+
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) {
+        children.push(new Paragraph({ children: [], spacing: { after: 80 } }));
+        continue;
+      }
+
+      // H1 heading: # Title
+      if (line.startsWith("# ")) {
+        children.push(new Paragraph({
+          heading: HeadingLevel.HEADING_1,
+          children: [new TextRun({ text: line.slice(2), bold: true, size: 48, font: "Arial", color: "080808" })],
+          spacing: { before: 480, after: 200 },
+        }));
+        continue;
+      }
+
+      // H2 heading: ## Section
+      if (line.startsWith("## ")) {
+        children.push(new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          children: [new TextRun({ text: line.slice(3), bold: true, size: 32, font: "Arial", color: "111111" })],
+          spacing: { before: 320, after: 120 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "EEEEEE" } },
+        }));
+        continue;
+      }
+
+      // H3 heading: ### Sub
+      if (line.startsWith("### ")) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line.slice(4), bold: true, size: 26, font: "Arial", color: "333333" })],
+          spacing: { before: 200, after: 80 },
+        }));
+        continue;
+      }
+
+      // Horizontal rule: ---
+      if (line === "---") {
+        children.push(new Paragraph({
+          children: [],
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "DDDDDD" } },
+          spacing: { before: 200, after: 200 },
+        }));
+        continue;
+      }
+
+      // Bullet point: - item
+      if (line.startsWith("- ") || line.startsWith("• ")) {
+        children.push(new Paragraph({
+          numbering: { reference: "bullets", level: 0 },
+          children: [new TextRun({ text: line.slice(2), size: 24, font: "Arial", color: "444444" })],
+          spacing: { before: 40, after: 40 },
+        }));
+        continue;
+      }
+
+      // Numbered list: 1. item
+      const numMatch = line.match(/^(\d+)\.\s(.+)/);
+      if (numMatch) {
+        children.push(new Paragraph({
+          numbering: { reference: "numbers", level: 0 },
+          children: [new TextRun({ text: numMatch[2], size: 24, font: "Arial", color: "444444" })],
+          spacing: { before: 40, after: 40 },
+        }));
+        continue;
+      }
+
+      // Bold text: **text**
+      if (line.startsWith("**") && line.endsWith("**")) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line.slice(2, -2), bold: true, size: 24, font: "Arial", color: "111111" })],
+          spacing: { before: 80, after: 80 },
+        }));
+        continue;
+      }
+
+      // Italic: *text*
+      if (line.startsWith("*") && line.endsWith("*")) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line.slice(1, -1), italics: true, size: 22, font: "Arial", color: "666666" })],
+          spacing: { before: 60, after: 60 },
+        }));
+        continue;
+      }
+
+      // Normal paragraph — handle inline **bold**
+      const parts  = line.split(/(\*\*[^*]+\*\*)/g);
+      const runs   = parts.map(part => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return new TextRun({ text: part.slice(2, -2), bold: true, size: 24, font: "Arial", color: "111111" });
+        }
+        return new TextRun({ text: part, size: 24, font: "Arial", color: "444444" });
+      });
+
+      children.push(new Paragraph({
+        children: runs,
+        spacing: { before: 60, after: 60 },
+      }));
+    }
+
+    // ── Add footer ────────────────────────────────────────────────────────
+    children.push(
+      new Paragraph({ children: [], spacing: { before: 400 } }),
+      new Paragraph({
+        children: [],
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: "EEEEEE" } },
+        spacing: { before: 0, after: 120 },
+      }),
+      new Paragraph({
+        children: [new TextRun({
+          text: `Generated by Perkart Intelligence  ·  ${date}  ·  CONFIDENTIAL`,
+          size: 18, font: "Arial", color: "AAAAAA", italics: true,
+        })],
+        alignment: AlignmentType.CENTER,
+      })
+    );
+
+    // ── Build document ────────────────────────────────────────────────────
+    const doc = new Document({
+      numbering: {
+        config: [
+          {
+            reference: "bullets",
+            levels: [{
+              level: 0, format: LevelFormat.BULLET, text: "•",
+              alignment: AlignmentType.LEFT,
+              style: { paragraph: { indent: { left: 720, hanging: 360 } } },
+            }],
+          },
+          {
+            reference: "numbers",
+            levels: [{
+              level: 0, format: LevelFormat.DECIMAL, text: "%1.",
+              alignment: AlignmentType.LEFT,
+              style: { paragraph: { indent: { left: 720, hanging: 360 } } },
+            }],
+          },
+        ],
+      },
+      styles: {
+        default: { document: { run: { font: "Arial", size: 24 } } },
+        paragraphStyles: [
+          {
+            id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
+            run: { size: 48, bold: true, font: "Arial", color: "080808" },
+            paragraph: { spacing: { before: 480, after: 200 }, outlineLevel: 0 },
+          },
+          {
+            id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
+            run: { size: 32, bold: true, font: "Arial", color: "111111" },
+            paragraph: { spacing: { before: 320, after: 120 }, outlineLevel: 1 },
+          },
+        ],
+      },
+      sections: [{
+        properties: {
+          page: {
+            size: { width: 11906, height: 16838 },
+            margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 },
+          },
+        },
+        children,
+      }],
+    });
+
+    // ── Save file ─────────────────────────────────────────────────────────
+    const buffer   = await Packer.toBuffer(doc);
+    const dirPath  = path.join(__dirname, "../public/pitch-decks");
+    fs.mkdirSync(dirPath, { recursive: true });
+
+    const fileName = `PitchDeck_${Date.now()}.docx`;
+    const filePath = path.join(dirPath, fileName);
+    fs.writeFileSync(filePath, buffer);
+
+    const downloadUrl = `${process.env.APP_URL || "https://api.perkart.in"}/pitch-decks/${fileName}`;
+
+    return res.json({ success: true, downloadUrl });
+
+  } catch (err) {
+    console.error("pitchDeck error:", err);
+    return res.status(500).json({ success: false, error: "Failed to generate DOCX" });
+  }
+};
+
+module.exports = { buildPitchDeck };
