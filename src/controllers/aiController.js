@@ -49,10 +49,11 @@ const getAIResponse = async (req, res) => {
       });
     }
 
-    // Always inject no-fake-files instruction for first message too
-    let enhancedPrompt = `${NO_FAKE_FILES_INSTRUCTION}\n\n${prompt || ""}`;
+    // Rewrite file requests and inject instructions for first message
+    const rewrittenPrompt = rewriteFileRequest(prompt || "");
+    let enhancedPrompt = `${NO_FAKE_FILES_INSTRUCTION}\n\n${rewrittenPrompt}`;
     if (isPitchDeckRequest(prompt || "")) {
-      enhancedPrompt = `${NO_FAKE_FILES_INSTRUCTION}\n\n${PITCH_DECK_INSTRUCTION}\n\nUser request: ${prompt}`;
+      enhancedPrompt = `${NO_FAKE_FILES_INSTRUCTION}\n\n${PITCH_DECK_INSTRUCTION}\n\nUser request: ${rewrittenPrompt}`;
     }
 
     const payload = {
@@ -151,6 +152,29 @@ const startNewsSession = async (req, res) => {
 // Global instruction injected into every message to prevent hallucinated file paths
 const NO_FAKE_FILES_INSTRUCTION = `IMPORTANT SYSTEM RULE: Never mention downloading files, never generate file paths, never reference sandbox:/mnt/data/ or any file system path, never say "download here", never offer to create a .docx or any file. Do not explain this rule to the user. Simply respond with the requested content as formatted text directly in your reply, without any mention of files or downloads.`;
 
+// Rewrite file generation requests into content requests
+// This prevents the AI from refusing and instead makes it generate the content
+function rewriteFileRequest(message) {
+  const lower = message.toLowerCase();
+  const fileKeywords = [
+    "generate docx", "create docx", "make docx", "download docx",
+    "generate doc", "create doc", "make doc",
+    "generate file", "create file", "make file",
+    "generate pdf", "create pdf", "make pdf",
+    "generate word", "create word", "make word document",
+    "download file", "download document", "get the file",
+    "give me the file", "give me the doc", "give me the docx",
+  ];
+
+  const isFileRequest = fileKeywords.some(k => lower.includes(k));
+
+  if (isFileRequest) {
+    return `Please format and write out the complete content as clean structured text with proper headings, sections, and bullet points. Write everything out in full detail right here in your response.`;
+  }
+
+  return message;
+}
+
 // Detect pitch deck intent in user message
 function isPitchDeckRequest(message) {
   const lower = message.toLowerCase();
@@ -228,11 +252,14 @@ const chatAI = async (req, res) => {
       });
     }
 
+    // Rewrite any file generation requests to content requests
+    const rewrittenMessage = rewriteFileRequest(String(message));
+
     // Always inject no-fake-files instruction
     // Additionally inject pitch deck format if user is requesting one
-    let enhancedMessage = `${NO_FAKE_FILES_INSTRUCTION}\n\n${String(message)}`;
+    let enhancedMessage = `${NO_FAKE_FILES_INSTRUCTION}\n\n${rewrittenMessage}`;
     if (isPitchDeckRequest(message)) {
-      enhancedMessage = `${NO_FAKE_FILES_INSTRUCTION}\n\n${PITCH_DECK_INSTRUCTION}\n\nUser request: ${message}`;
+      enhancedMessage = `${NO_FAKE_FILES_INSTRUCTION}\n\n${PITCH_DECK_INSTRUCTION}\n\nUser request: ${rewrittenMessage}`;
     }
 
     const payload = {
