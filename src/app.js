@@ -23,5 +23,4 @@ app.use("/api/admin/auth", require("./routes/adminAuth"));
 app.use("/api/plans", planRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api", profileRoutes);
-
 module.exports = app;

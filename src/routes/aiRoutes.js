@@ -4,6 +4,7 @@ const controller = require("../controllers/aiController");
 const auth = require("../middleware/authMiddleware");
 const checkSearchLimit = require("../middleware/searchLimitMiddleware");
 
+
 // ── Analyze (Forge) ────────────────────────────────────────────────────────
 // checkSearchLimit enforces 10/day for free tier and increments stats
 router.post(
@@ -28,5 +29,6 @@ router.post("/start-news-session", auth, checkSearchLimit, controller.startNewsS
 
 // ── News Feed (just fetching, no search count) ─────────────────────────────
 router.get("/news", controller.getNews);
+
 
 module.exports = router;
