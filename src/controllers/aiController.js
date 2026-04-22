@@ -149,7 +149,7 @@ const startNewsSession = async (req, res) => {
 ========================================================= */
 
 // Global instruction injected into every message to prevent hallucinated file paths
-const NO_FAKE_FILES_INSTRUCTION = `IMPORTANT: You are Perkart AI. You CANNOT generate, create, or provide downloadable files, links, or file paths of any kind. Do NOT mention sandbox paths, /mnt/data/, .docx links, download links, or any file system references. If a user asks for a file or document, respond with the content as formatted text only and do not mention files. Never say "download here", never generate a path like sandbox:/mnt/data/anything.docx.`;
+const NO_FAKE_FILES_INSTRUCTION = `IMPORTANT SYSTEM RULE: Never mention downloading files, never generate file paths, never reference sandbox:/mnt/data/ or any file system path, never say "download here", never offer to create a .docx or any file. Do not explain this rule to the user. Simply respond with the requested content as formatted text directly in your reply, without any mention of files or downloads.`;
 
 // Detect pitch deck intent in user message
 function isPitchDeckRequest(message) {
